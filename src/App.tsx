@@ -6,48 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
 import { Badge } from './components/ui/badge'
 import { Separator } from './components/ui/separator'
 import { Progress } from './components/ui/progress'
-import { FileText, Download, Copy, Sparkles, CheckCircle, AlertCircle } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select'
+import { FileText, Download, Copy, Sparkles, CheckCircle, AlertCircle, FileDown, FileType } from 'lucide-react'
 import { useToast } from './hooks/use-toast'
 import { Toaster } from './components/ui/toaster'
+import { ResumeTemplate } from './components/ResumeTemplates'
+import { OptimizedResume, ResumeTemplate as ResumeTemplateType } from './types/resume'
+import { generatePDF, generateWordDoc } from './utils/documentGenerator'
 
 interface User {
   id: string
   email: string
   displayName?: string
-}
-
-interface OptimizedResume {
-  contact: {
-    name: string
-    phone: string
-    email: string
-    linkedin: string
-  }
-  profile: string
-  education: Array<{
-    institution: string
-    degree: string
-    duration: string
-    gpa?: string
-  }>
-  skills: {
-    technical: string[]
-    analytical: string[]
-    soft: string[]
-  }
-  experience: Array<{
-    company: string
-    position: string
-    duration: string
-    bullets: string[]
-  }>
-  projects?: Array<{
-    title: string
-    description: string
-    bullets: string[]
-  }>
-  achievements: string[]
-  atsScore: number
 }
 
 const formatResumeAsText = (resume: OptimizedResume): string => {
@@ -118,6 +88,9 @@ ACHIEVEMENTS
 • 1st Prize, Enigma Case Competition – Conducted comprehensive case study on the Indian EV Market`)
   const [optimizedResume, setOptimizedResume] = useState<OptimizedResume | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<ResumeTemplateType>('modern')
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const [isGeneratingWord, setIsGeneratingWord] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -250,6 +223,48 @@ ${rawResume}`,
       title: "Copied!",
       description: "Resume copied to clipboard.",
     })
+  }
+
+  const handleGeneratePDF = async () => {
+    if (!optimizedResume) return
+    
+    setIsGeneratingPDF(true)
+    try {
+      const result = await generatePDF(optimizedResume, selectedTemplate)
+      toast({
+        title: "PDF Generated!",
+        description: `Downloaded: ${result.fileName}`,
+      })
+    } catch (error) {
+      toast({
+        title: "PDF Generation Failed",
+        description: "Please try again or contact support.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  const handleGenerateWord = async () => {
+    if (!optimizedResume) return
+    
+    setIsGeneratingWord(true)
+    try {
+      const result = await generateWordDoc(optimizedResume, selectedTemplate)
+      toast({
+        title: "Word Document Generated!",
+        description: `Downloaded: ${result.fileName}`,
+      })
+    } catch (error) {
+      toast({
+        title: "Word Generation Failed",
+        description: "Please try again or contact support.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsGeneratingWord(false)
+    }
   }
 
 
@@ -421,110 +436,103 @@ ${rawResume}`,
                   </CardContent>
                 </Card>
 
+                {/* Template Selection */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Resume Template</CardTitle>
+                    <p className="text-sm text-gray-600">Choose a professional template for your resume</p>
+                  </CardHeader>
+                  <CardContent>
+                    <Select value={selectedTemplate} onValueChange={(value: ResumeTemplateType) => setSelectedTemplate(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="modern">Modern - Clean with blue accents</SelectItem>
+                        <SelectItem value="classic">Classic - Traditional serif style</SelectItem>
+                        <SelectItem value="minimal">Minimal - Simple monospace design</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+
+                {/* Download Options */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Download Resume</CardTitle>
+                    <p className="text-sm text-gray-600">Export your optimized resume in professional formats</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button 
+                        onClick={handleGeneratePDF}
+                        disabled={isGeneratingPDF}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        {isGeneratingPDF ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <FileDown className="w-4 h-4 mr-2" />
+                            PDF
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={handleGenerateWord}
+                        disabled={isGeneratingWord}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        {isGeneratingWord ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <FileType className="w-4 h-4 mr-2" />
+                            Word
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={copyToClipboard}
+                      >
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy Text
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          const resumeText = formatResumeAsText(optimizedResume)
+                          const blob = new Blob([resumeText], { type: 'text/plain' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `${optimizedResume.contact.name.replace(/\s+/g, '_')}_Resume.txt`
+                          a.click()
+                          URL.revokeObjectURL(url)
+                        }}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        TXT
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {/* Resume Preview */}
                 <Card>
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>Optimized Resume</CardTitle>
-                      <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={copyToClipboard}
-                        >
-                          <Copy className="w-4 h-4 mr-2" />
-                          Copy
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            const resumeText = formatResumeAsText(optimizedResume)
-                            const blob = new Blob([resumeText], { type: 'text/plain' })
-                            const url = URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            a.href = url
-                            a.download = `${optimizedResume.contact.name.replace(/\s+/g, '_')}_Resume.txt`
-                            a.click()
-                            URL.revokeObjectURL(url)
-                          }}
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
+                    <CardTitle>Resume Preview - {selectedTemplate.charAt(0).toUpperCase() + selectedTemplate.slice(1)} Template</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="bg-white border rounded-lg p-6 font-mono text-sm space-y-4 max-h-[600px] overflow-y-auto">
-                      {/* Contact */}
-                      <div className="text-center">
-                        <h2 className="text-lg font-bold">{optimizedResume.contact.name}</h2>
-                        <p>{optimizedResume.contact.phone} | {optimizedResume.contact.email} | {optimizedResume.contact.linkedin}</p>
-                      </div>
-
-                      <Separator />
-
-                      {/* Profile */}
-                      <div>
-                        <h3 className="font-bold mb-2">PROFILE</h3>
-                        <p className="text-gray-700">{optimizedResume.profile}</p>
-                      </div>
-
-                      {/* Education */}
-                      <div>
-                        <h3 className="font-bold mb-2">EDUCATION</h3>
-                        {optimizedResume.education.map((edu, idx) => (
-                          <p key={idx} className="text-gray-700">
-                            • {edu.institution} | {edu.degree} | {edu.duration}
-                            {edu.gpa && ` | ${edu.gpa}`}
-                          </p>
-                        ))}
-                      </div>
-
-                      {/* Skills */}
-                      <div>
-                        <h3 className="font-bold mb-2">SKILLS</h3>
-                        <p className="text-gray-700"><strong>Technical:</strong> {optimizedResume.skills.technical.join(', ')}</p>
-                        <p className="text-gray-700"><strong>Analytical:</strong> {optimizedResume.skills.analytical.join(', ')}</p>
-                        <p className="text-gray-700"><strong>Soft Skills:</strong> {optimizedResume.skills.soft.join(', ')}</p>
-                      </div>
-
-                      {/* Experience */}
-                      <div>
-                        <h3 className="font-bold mb-2">EXPERIENCE</h3>
-                        {optimizedResume.experience.map((exp, idx) => (
-                          <div key={idx} className="mb-3">
-                            <p className="font-medium">{exp.company} | {exp.position} | {exp.duration}</p>
-                            {exp.bullets.map((bullet, bulletIdx) => (
-                              <p key={bulletIdx} className="text-gray-700 ml-2">• {bullet}</p>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Projects */}
-                      {optimizedResume.projects && optimizedResume.projects.length > 0 && (
-                        <div>
-                          <h3 className="font-bold mb-2">PROJECTS</h3>
-                          {optimizedResume.projects.map((project, idx) => (
-                            <div key={idx} className="mb-3">
-                              <p className="font-medium">{project.title} | {project.description}</p>
-                              {project.bullets.map((bullet, bulletIdx) => (
-                                <p key={bulletIdx} className="text-gray-700 ml-2">• {bullet}</p>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Achievements */}
-                      <div>
-                        <h3 className="font-bold mb-2">ACHIEVEMENTS</h3>
-                        {optimizedResume.achievements.map((achievement, idx) => (
-                          <p key={idx} className="text-gray-700">• {achievement}</p>
-                        ))}
-                      </div>
+                    <div className="border rounded-lg overflow-hidden max-h-[600px] overflow-y-auto">
+                      <ResumeTemplate resume={optimizedResume} template={selectedTemplate} />
                     </div>
                   </CardContent>
                 </Card>
